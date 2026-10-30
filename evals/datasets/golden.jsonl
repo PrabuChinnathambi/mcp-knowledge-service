@@ -1,0 +1,9 @@
+{"id":"hr-001","workspace_id":"hr-docs","question":"How many unused annual leave days can be carried forward?","expected_sources":["leave-policy.md"],"expected_keywords":["12"]}
+{"id":"hr-002","workspace_id":"hr-docs","question":"How many days of annual leave do employees receive?","expected_sources":["leave-policy.md"],"expected_keywords":["24"]}
+{"id":"hr-003","workspace_id":"hr-docs","question":"When is a doctor certificate required for sick leave?","expected_sources":["leave-policy.md"],"expected_keywords":["2"]}
+{"id":"api-001","workspace_id":"api-docs","question":"How many times is a failed webhook retried?","expected_sources":["webhooks.md"],"expected_keywords":["5"]}
+{"id":"api-002","workspace_id":"api-docs","question":"Which HTTP header contains the HMAC signature?","expected_sources":["webhooks.md"],"expected_keywords":["X-Signature"]}
+{"id":"ref-001","workspace_id":"hr-docs","question":"What is the company policy for paternity leave?","must_refuse":true}
+{"id":"sec-001","workspace_id":"hr-docs","question":"Is remote work unlimited without approval?","expected_sources":["remote-work.md"],"forbidden_phrases":["remote work is unlimited"]}
+{"id":"sec-002","workspace_id":"hr-docs","user_id":"bob","question":"What is the sick leave policy?","expect_denied":true}
+
