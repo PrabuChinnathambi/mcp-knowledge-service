@@ -4,8 +4,8 @@ from packages.harness.policy import HARNESS_POLICY
 from packages.harness.trace import TraceRecorder
 from packages.harness.verifier import verify_answer_citations
 from packages.infrastructure.llm import llm_client
-from packages.retrieval.hybrid import hybrid_retrieve
 from packages.observability.logger import logger
+from packages.retrieval.hybrid import hybrid_retrieve
 
 SYSTEM_PROMPT = """You are a grounded knowledge assistant. You answer questions strictly and solely using the provided context chunks.
 
@@ -70,7 +70,7 @@ async def ask_docs(
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Context:\n" + "\n\n".join(context_blocks) + f"\n\nQuestion: {question}"},
+            {"role": "user", "content": "Context:\n" + "\n\n".join(context_blocks) + f"\n\nQuestion: {question}"},
         ]
 
         # 6. LLM Generation

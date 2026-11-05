@@ -1,6 +1,8 @@
 import io
 import os
+
 from minio import Minio
+
 from packages.core.config import get_settings
 from packages.observability.logger import logger
 

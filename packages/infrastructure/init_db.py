@@ -1,7 +1,9 @@
 import asyncio
+
 from sqlalchemy import text
-from packages.infrastructure.database import engine
+
 from packages.domain.models import Base
+from packages.infrastructure.database import engine
 from packages.observability.logger import logger
 
 

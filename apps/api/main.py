@@ -1,6 +1,8 @@
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+
 from fastapi import FastAPI
+
 from packages.core.config import get_settings
 
 settings = get_settings()

@@ -1,6 +1,7 @@
 import os
 import re
 from dataclasses import dataclass
+
 import fitz  # PyMuPDF
 
 

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 from packages.infrastructure.llm import ModelAnswerSchema
 
 

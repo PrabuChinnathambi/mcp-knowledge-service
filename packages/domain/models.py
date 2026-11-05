@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BIGINT,
@@ -15,6 +16,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, relationship
+
 from packages.core.config import get_settings
 
 settings = get_settings()
@@ -39,13 +41,13 @@ class Document(Base):
     embed_model = Column(String(128), nullable=False)
     created_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -77,7 +79,7 @@ class Chunk(Base):
     )
     created_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -108,7 +110,7 @@ class ExecutionTrace(Base):
     data = Column(JSONB, nullable=False)
     created_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
 

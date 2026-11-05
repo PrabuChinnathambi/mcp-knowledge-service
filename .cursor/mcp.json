@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "knowledge-service": {
+      "command": "C:\\Users\\Karunakaran\\.local\\bin\\uv.exe",
+      "args": [
+        "--directory",
+        "C:\\Users\\Karunakaran\\Prabu\\mcp-knowledge-service",
+        "run",
+        "python",
+        "-m",
+        "apps.mcp_server.main"
+      ],
+      "env": {
+        "MCP_USER_ID": "alice"
+      }
+    }
+  }
+}
+

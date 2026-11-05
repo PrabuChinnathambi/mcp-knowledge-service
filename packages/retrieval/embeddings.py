@@ -1,9 +1,10 @@
 import hashlib
 import math
 from abc import ABC, abstractmethod
+
 import httpx
+
 from packages.core.config import get_settings
-from packages.observability.logger import logger
 
 settings = get_settings()
 

@@ -1,11 +1,12 @@
 import time
 import uuid
 from dataclasses import dataclass
+
 from sqlalchemy import select, text
+
 from packages.domain.models import Chunk, Document
 from packages.infrastructure.database import AsyncSessionLocal
 from packages.retrieval.embeddings import get_embedding_provider
-from packages.observability.logger import logger
 
 embedder = get_embedding_provider()
 

@@ -1,7 +1,13 @@
+
 from mcp.server.mcpserver import MCPServer
+
 from packages.core.config import get_settings
 from packages.harness.agent import ask_docs
-from packages.harness.auth import USER_DIRECTORY, assert_can_write, assert_workspace_access
+from packages.harness.auth import (
+    USER_DIRECTORY,
+    assert_can_write,
+    assert_workspace_access,
+)
 from packages.ingestion.pipeline import ingest_document_file
 from packages.observability.logger import logger
 from packages.retrieval.hybrid import hybrid_retrieve
