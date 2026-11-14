@@ -23,6 +23,7 @@ async def ask_docs(
     workspace_id: str,
     user_id: str,
     top_k: int = 5,
+    model: str | None = None,
 ) -> dict:
     trace = TraceRecorder(user_id=user_id, workspace_id=workspace_id, query=question)
 
@@ -73,14 +74,16 @@ async def ask_docs(
             {"role": "user", "content": "Context:\n" + "\n\n".join(context_blocks) + f"\n\nQuestion: {question}"},
         ]
 
-        # 6. LLM Generation
-        llm_resp = await llm_client.generate_grounded_answer(messages)
+        # 6. LLM Generation (supports multi-model selection: Qwen 2.5, Llama 3.2, DeepSeek-R1)
+        llm_resp = await llm_client.generate_grounded_answer(messages, model=model)
         trace.record_step(
             "llm_generation",
             {
+                "model": llm_resp.model_name,
                 "latency_ms": llm_resp.latency_ms,
                 "prompt_tokens": llm_resp.prompt_tokens,
                 "completion_tokens": llm_resp.completion_tokens,
+                "has_reasoning": bool(llm_resp.reasoning_trace),
             },
         )
 
@@ -95,6 +98,7 @@ async def ask_docs(
             res = {
                 "trace_id": trace.trace_id,
                 "status": "failed",
+                "model": llm_resp.model_name,
                 "answer": "The generated answer could not be verified against the source documents.",
                 "citations": [],
                 "error": verdict.reason,
@@ -106,6 +110,7 @@ async def ask_docs(
             res = {
                 "trace_id": trace.trace_id,
                 "status": "refused",
+                "model": llm_resp.model_name,
                 "answer": (llm_resp.parsed.answer if llm_resp.parsed else None) or "Insufficient evidence in documents.",
                 "citations": [],
             }
@@ -131,9 +136,13 @@ async def ask_docs(
         res = {
             "trace_id": trace.trace_id,
             "status": "answered",
+            "model": llm_resp.model_name,
             "answer": answer_text,
             "citations": formatted_citations,
         }
+        if llm_resp.reasoning_trace:
+            res["reasoning"] = llm_resp.reasoning_trace
+
         await trace.persist(status="answered", output=res, top_score=retrieval.top_vector_score)
         return res
 
@@ -146,4 +155,3 @@ async def ask_docs(
         res = {"trace_id": trace.trace_id, "status": "failed", "answer": "An internal error occurred.", "citations": [], "error": str(exc)}
         await trace.persist(status="failed", output=res)
         return res
-

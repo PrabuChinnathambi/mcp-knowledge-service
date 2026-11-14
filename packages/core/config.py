@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     EMBEDDING_DIMENSIONS: int = 768
     OLLAMA_URL: str = "http://localhost:11434"
     LLM_MODEL: str = "qwen2.5:7b-instruct"
+    SUPPORTED_LLM_MODELS: str = "qwen2.5:7b-instruct,llama3.2:3b,deepseek-r1:1.5b"
 
     # Ingestion Parameters
     CHUNK_SIZE: int = 1000

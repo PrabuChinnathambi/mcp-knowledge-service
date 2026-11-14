@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import json
 import os
@@ -10,15 +11,25 @@ from packages.harness.agent import ask_docs
 
 
 async def main():
-    if len(sys.argv) < 3:
-        print("Usage: uv run python scripts/ask.py <workspace_id> <question>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Query mcp-knowledge-service with multi-LLM support.")
+    parser.add_argument("workspace_id", help="Target workspace (e.g. hr-docs)")
+    parser.add_argument("question", help="Question to ask grounded in workspace documents")
+    parser.add_argument(
+        "--model",
+        "-m",
+        default=None,
+        help="Optional local LLM model (e.g. qwen2.5:7b-instruct, llama3.2:3b, deepseek-r1:1.5b)",
+    )
+    args = parser.parse_args()
 
-    workspace = sys.argv[1]
-    question = " ".join(sys.argv[2:])
     user_id = os.getenv("MCP_USER_ID", "alice")
 
-    result = await ask_docs(question=question, workspace_id=workspace, user_id=user_id)
+    result = await ask_docs(
+        question=args.question,
+        workspace_id=args.workspace_id,
+        user_id=user_id,
+        model=args.model,
+    )
     print("\n" + "=" * 60)
     print("HARNESS RESPONSE:")
     print("=" * 60)

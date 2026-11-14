@@ -8,6 +8,7 @@ from packages.harness.auth import (
     assert_can_write,
     assert_workspace_access,
 )
+from packages.infrastructure.llm import llm_client
 from packages.ingestion.pipeline import ingest_document_file
 from packages.observability.logger import logger
 from packages.retrieval.hybrid import hybrid_retrieve
@@ -54,13 +55,22 @@ async def search_knowledge(workspace_id: str, query: str, top_k: int = 5) -> dic
 
 
 @mcp.tool(
-    name="ask_docs",
-    description="Ask a question grounded in documentation. Returns a verified answer with citations, or refuses.",
+    name="list_models",
+    description="List available local offline LLMs (Qwen 2.5, Llama 3.2, DeepSeek-R1) and their installation status.",
 )
-async def ask_docs_tool(workspace_id: str, question: str) -> dict:
+async def list_models_tool() -> list[dict]:
+    logger.info("mcp_tool_called", tool="list_models")
+    return await llm_client.list_available_models()
+
+
+@mcp.tool(
+    name="ask_docs",
+    description="Ask a question grounded in documentation. Optionally specify model ('qwen2.5:7b-instruct', 'llama3.2:3b', 'deepseek-r1:1.5b'). Returns a verified answer with citations.",
+)
+async def ask_docs_tool(workspace_id: str, question: str, model: str | None = None) -> dict:
     user_id = settings.MCP_USER_ID
-    logger.info("mcp_tool_called", tool="ask_docs", workspace=workspace_id, user_id=user_id)
-    return await ask_docs(question=question, workspace_id=workspace_id, user_id=user_id)
+    logger.info("mcp_tool_called", tool="ask_docs", workspace=workspace_id, user_id=user_id, model=model)
+    return await ask_docs(question=question, workspace_id=workspace_id, user_id=user_id, model=model)
 
 
 @mcp.tool(

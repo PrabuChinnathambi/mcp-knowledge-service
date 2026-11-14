@@ -5,8 +5,8 @@
 [![Model Context Protocol](https://img.shields.io/badge/MCP-2.3%2B-purple.svg)](https://modelcontextprotocol.io/)
 [![Package Manager](https://img.shields.io/badge/uv-managed-2b2b2b.svg)](https://astral.sh/uv)
 [![Vector Engine](https://img.shields.io/badge/PostgreSQL%2017-pgvector-336791.svg?logo=postgresql)](https://github.com/pgvector/pgvector)
-[![Inference Engine](https://img.shields.io/badge/Ollama-GPU%20Accelerated-black.svg)](https://ollama.com/)
-[![Tests](https://img.shields.io/badge/Tests-13%20Passing-brightgreen.svg)](#testing--quality-assurance)
+[![Inference Engine](https://img.shields.io/badge/Ollama-Multi--LLM%20(Qwen%20%7C%20Llama%20%7C%20DeepSeek)-black.svg)](https://ollama.com/)
+[![Tests](https://img.shields.io/badge/Tests-19%20Passing-brightgreen.svg)](#testing--quality-assurance)
 
 An enterprise-grade, local-first Knowledge Management and Semantic Retrieval Service built on Anthropic's **Model Context Protocol (MCP)**. 
 
@@ -400,13 +400,19 @@ uv run python scripts/search.py <workspace_id> <query>
 uv run python scripts/search.py api-docs "X-Signature header"
 ```
 
-### 3. Agent Harness Q&A
+### 3. Agent Harness Q&A (Multi-LLM Enabled)
+
+The service supports dynamic local model switching between **Qwen 2.5**, **Llama 3.2**, and **DeepSeek-R1**:
+
 ```bash
-uv run python scripts/ask.py <workspace_id> <question>
-```
-*Example:*
-```bash
+# Default (Qwen 2.5 7B Instruct - Enterprise Structured Output)
 uv run python scripts/ask.py hr-docs "When is a medical certificate required for sick leave?"
+
+# Fast Inference (Llama 3.2 3B - Ultra-low latency)
+uv run python scripts/ask.py hr-docs "How many days of annual vacation do employees get?" --model llama3.2:3b
+
+# Deep Reasoning (DeepSeek-R1 1.5B - Multi-step logic & <think> reasoning)
+uv run python scripts/ask.py hr-docs "Can an employee carry forward leave into Q2?" --model deepseek-r1:1.5b
 ```
 
 ---
