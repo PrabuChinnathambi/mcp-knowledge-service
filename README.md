@@ -6,13 +6,17 @@
 [![Package Manager](https://img.shields.io/badge/uv-managed-2b2b2b.svg)](https://astral.sh/uv)
 [![Vector Engine](https://img.shields.io/badge/PostgreSQL%2017-pgvector-336791.svg?logo=postgresql)](https://github.com/pgvector/pgvector)
 [![Inference Engine](https://img.shields.io/badge/Ollama-Multi--LLM%20(Qwen%20%7C%20Llama%20%7C%20DeepSeek)-black.svg)](https://ollama.com/)
-[![Tests](https://img.shields.io/badge/Tests-19%20Passing-brightgreen.svg)](#testing--quality-assurance)
+[![Tests](https://img.shields.io/badge/Tests-27%20Passing-brightgreen.svg)](#testing--quality-assurance)
+[![Evaluation Benchmark](https://img.shields.io/badge/Evaluation%20Gate-100%25%20Passed-brightgreen.svg)](#evaluation-harness--golden-dataset)
 
 An enterprise-grade, local-first Knowledge Management and Semantic Retrieval Service built on Anthropic's **Model Context Protocol (MCP)**. 
 
 The service acts as a governed, zero-hallucination knowledge backbone that empowers AI clients—such as **Claude Desktop**, **Cursor AI**, and autonomous agent loops—to securely index, search, and ground contextual answers across private enterprise documentation with **verified citations, multi-tenant RBAC, PII redaction, and prompt injection defense**.
 
 ---
+
+> [!TIP]
+> **Live Project Task & Roadmap Checklist**: Track all completed components and remaining roadmap items in [`PROJECT_CHECKLIST.md`](PROJECT_CHECKLIST.md).
 
 ## Table of Contents
 

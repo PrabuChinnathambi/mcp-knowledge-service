@@ -50,3 +50,11 @@ htmlcov/
 *.log
 *.sqlite3
 *.db
+
+# Local storage files
+data/storage/*
+!data/storage/.gitkeep
+
+# Evaluation reports
+evals/reports/*
+!evals/reports/.gitkeep

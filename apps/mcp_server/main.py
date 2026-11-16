@@ -85,5 +85,22 @@ async def ingest_document_tool(workspace_id: str, file_path: str) -> dict:
 
 
 if __name__ == "__main__":
-    # Runs over stdio JSON-RPC transport by default in mcp 2.x
-    mcp.run()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="MCP Knowledge Server")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse"],
+        default="stdio",
+        help="Transport protocol: 'stdio' (default, local JSON-RPC) or 'sse' (HTTP Server-Sent Events)",
+    )
+    parser.add_argument("--host", default="0.0.0.0", help="Host address when running in SSE mode")
+    parser.add_argument("--port", type=int, default=8080, help="Port when running in SSE mode")
+    args = parser.parse_args()
+
+    if args.transport == "sse":
+        logger.info("Starting MCP server over SSE transport", host=args.host, port=args.port)
+        mcp.run(transport="sse", host=args.host, port=args.port)
+    else:
+        # Default: stdio JSON-RPC for Claude Desktop & Cursor
+        mcp.run()
