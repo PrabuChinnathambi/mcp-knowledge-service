@@ -31,10 +31,13 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 150
     MIN_RELEVANCE: float = 0.30
 
-    # Security & RBAC
+    # Security, RBAC & JWT Authentication
     API_KEY: str = "dev-secret-key"
     MCP_USER_ID: str = "alice"
     ALLOWED_TOOLS: str = "list_collections,search_knowledge,ask_docs,ingest_document"
+    JWT_SECRET_KEY: str = "dev-insecure-jwt-secret-key-change-in-prod-super-secure"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
     model_config = SettingsConfigDict(
         env_file=".env",

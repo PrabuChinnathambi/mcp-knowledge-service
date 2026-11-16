@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from evals.graders.graders import (
     grade_access_control,
+    grade_forbidden_phrases,
     grade_keyword_coverage,
     grade_refusal,
     grade_source_recall,
@@ -19,14 +20,14 @@ REPORTS_DIR = "evals/reports"
 MIN_PASS_RATE = 0.80
 
 
-async def run_evaluation():
+async def run_evaluation(model: str | None = None):
     os.makedirs(REPORTS_DIR, exist_ok=True)
     with open(DATASET_PATH, "r", encoding="utf-8") as f:
         cases = [json.loads(line) for line in f if line.strip()]
 
     results = []
     print("\n" + "=" * 60)
-    print("STARTING EVALUATION HARNESS RUN")
+    print(f"STARTING EVALUATION HARNESS RUN (Model: {model or 'default'})")
     print("=" * 60)
 
     for c in cases:
@@ -35,14 +36,20 @@ async def run_evaluation():
             question=c["question"],
             workspace_id=c["workspace_id"],
             user_id=user_id,
+            model=model,
         )
 
-        grades = [
-            grade_source_recall(c.get("expected_sources", []), res.get("citations", [])),
+        grades = []
+        if "forbidden_phrases" in c:
+            grades.append(grade_forbidden_phrases(c["forbidden_phrases"], res.get("answer", ""), res.get("status", "")))
+        else:
+            grades.append(grade_source_recall(c.get("expected_sources", []), res.get("citations", [])))
+
+        grades.extend([
             grade_keyword_coverage(c.get("expected_keywords", []), res.get("answer", "")),
             grade_refusal(c.get("must_refuse", False), res.get("status")),
             grade_access_control(c.get("expect_denied", False), res.get("status")),
-        ]
+        ])
 
         passed = all(g.passed for g in grades)
         results.append({"case_id": c["id"], "passed": passed, "grades": grades, "result": res})
@@ -65,4 +72,5 @@ async def run_evaluation():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_evaluation())
+    target_model = sys.argv[1] if len(sys.argv) > 1 else None
+    asyncio.run(run_evaluation(model=target_model))

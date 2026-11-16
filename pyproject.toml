@@ -48,3 +48,16 @@ pythonpath = ["."]
 testpaths = ["tests"]
 asyncio_default_fixture_loop_scope = "function"
 
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+ignore = [
+    "B008",     # Allow FastAPI Depends/File/Form in default parameters
+    "BLE001",   # Allow catching Exception in top-level handlers
+    "ASYNC230", # Allow sync file open in async routines
+    "S110",     # Allow pass in cleanup try/except blocks
+]
+
+

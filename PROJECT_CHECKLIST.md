@@ -12,8 +12,8 @@ This document tracks the end-to-end implementation status of the **MCP Knowledge
 | Metric | Current Status | Target |
 | :--- | :--- | :--- |
 | **Current Git Branch** | `feat-setup-mcp-environment` | Protected `main` via PR |
-| **Implementation Progress** | **95% Complete** (Production-Ready Architecture) | 100% (Production Cloud Deployment) |
-| **Automated Unit Tests** | **33 / 33 Passing** (100%) | 100% Pass Rate |
+| **Implementation Progress** | **97% Complete** (Production-Ready Architecture) | 100% (Production Cloud Deployment) |
+| **Automated Unit Tests** | **40 / 40 Passing** (100%) | 100% Pass Rate |
 | **Golden Evals Benchmark** | **8 / 8 Passing** (100.0% Pass Rate) | $\ge$ 80% Pass Gate |
 | **Local Offline LLMs** | **3 Models Integrated** (Qwen 2.5, Llama 3.2, DeepSeek-R1) | Multi-Model Local Fallback |
 | **Supported Ingestion Formats** | Markdown (`.md`), Text (`.txt`), PDF (`.pdf`), Word (`.docx`), Excel (`.xlsx`) | Full Enterprise Format Support |
@@ -164,10 +164,11 @@ This document tracks the end-to-end implementation status of the **MCP Knowledge
   - [x] `test_chunker.py`: 3 tests covering section splitting and sliding windows.
   - [x] `test_config.py`: 2 tests covering environment loading and embedding dimensions.
   - [x] `test_guardrails.py`: 3 tests covering PII masking and injection detection.
+  - [x] `test_jwt_auth.py`: 7 tests covering JWT issuance, Bearer token validation, expiration, and write protections.
   - [x] `test_llm_multi_model.py`: 6 tests covering multi-model routing and DeepSeek `<think>` extraction.
   - [x] `test_loaders_advanced.py`: 3 tests covering `.docx`, `.xlsx`, and format validation.
   - [x] `test_verifier.py`: 3 tests covering grounded citation validation and hallucination rejection.
-  - [x] **Total: 33 / 33 unit tests passing** (`uv run pytest tests/unit/`).
+  - [x] **Total: 40 / 40 unit tests passing** (`uv run pytest tests/unit/`).
 - [x] **Enterprise CI/CD Workflow (`.github/workflows/ci.yml`)**
   - [x] Automated GitHub Actions workflow on PR / Push.
   - [x] Spins up PostgreSQL 17 + `pgvector` service container.
@@ -201,9 +202,13 @@ This document tracks the end-to-end implementation status of the **MCP Knowledge
   - [ ] Integrate Tesseract OCR or Docling for scanned image-based PDFs without embedded text.
 
 ### 10.4 Production Authentication & Security Hardening
-- [ ] **JWT / OAuth2 Bearer Authentication**
-  - [ ] Replace static API key with JWT access tokens for REST API endpoints.
-  - [ ] Wire user identity claims into `USER_DIRECTORY` dynamically.
+- [x] **JWT / OAuth2 Bearer Authentication**
+  - [x] HS256 JWT access token generation (`create_access_token`) with configurable expiration (`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`).
+  - [x] Secure `POST /v1/auth/token` login endpoint with credential verification against directory.
+  - [x] FastAPI Bearer security dependency (`get_current_user`) validating signature, claims, and TTL.
+  - [x] Dynamic user directory claim synchronization (`sub`, `role`, `workspaces`).
+  - [x] Role-based privilege enforcement (`admin`, `editor`, `viewer`) on REST endpoints.
+  - [x] 100% test coverage with 7 dedicated unit tests (`tests/unit/test_jwt_auth.py`).
 - [ ] **Rate Limiting & Throttling**
   - [ ] Add SlowAPI / Redis-backed rate limiting on `POST /v1/harness/ask` and `POST /v1/documents/upload`.
 

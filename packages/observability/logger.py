@@ -2,12 +2,8 @@ import sys
 
 import structlog
 
-from packages.core.config import get_settings
-
 
 def setup_logger():
-    settings = get_settings()
-
     # CRITICAL: Always direct logs to stderr. stdout is reserved for MCP JSON-RPC.
     structlog.configure(
         processors=[

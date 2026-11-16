@@ -2,6 +2,7 @@ import io
 import os
 import re
 from dataclasses import dataclass
+from typing import ClassVar
 
 import docx
 import fitz  # PyMuPDF
@@ -17,7 +18,7 @@ class LoadedDocument:
 
 
 class DocumentLoader:
-    SUPPORTED_EXTENSIONS = {".md", ".txt", ".pdf", ".docx", ".xlsx"}
+    SUPPORTED_EXTENSIONS: ClassVar[set[str]] = {".md", ".txt", ".pdf", ".docx", ".xlsx"}
 
     @classmethod
     def load(cls, file_path: str, raw_bytes: bytes | None = None) -> LoadedDocument:
