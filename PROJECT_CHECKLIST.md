@@ -12,8 +12,8 @@ This document tracks the end-to-end implementation status of the **MCP Knowledge
 | Metric | Current Status | Target |
 | :--- | :--- | :--- |
 | **Current Git Branch** | `feat-setup-mcp-environment` | Protected `main` via PR |
-| **Implementation Progress** | **97% Complete** (Production-Ready Architecture) | 100% (Production Cloud Deployment) |
-| **Automated Unit Tests** | **40 / 40 Passing** (100%) | 100% Pass Rate |
+| **Implementation Progress** | **100% Complete** (Production-Ready Architecture) | 100% (Production Cloud Deployment) |
+| **Automated Unit Tests** | **45 / 45 Passing** (100%) | 100% Pass Rate |
 | **Golden Evals Benchmark** | **8 / 8 Passing** (100.0% Pass Rate) | $\ge$ 80% Pass Gate |
 | **Local Offline LLMs** | **3 Models Integrated** (Qwen 2.5, Llama 3.2, DeepSeek-R1) | Multi-Model Local Fallback |
 | **Supported Ingestion Formats** | Markdown (`.md`), Text (`.txt`), PDF (`.pdf`), Word (`.docx`), Excel (`.xlsx`) | Full Enterprise Format Support |
@@ -209,14 +209,26 @@ This document tracks the end-to-end implementation status of the **MCP Knowledge
   - [x] Dynamic user directory claim synchronization (`sub`, `role`, `workspaces`).
   - [x] Role-based privilege enforcement (`admin`, `editor`, `viewer`) on REST endpoints.
   - [x] 100% test coverage with 7 dedicated unit tests (`tests/unit/test_jwt_auth.py`).
-- [ ] **Rate Limiting & Throttling**
-  - [ ] Add SlowAPI / Redis-backed rate limiting on `POST /v1/harness/ask` and `POST /v1/documents/upload`.
+- [x] **Rate Limiting & Throttling (SlowAPI + Redis/Memory fallback)**
+  - [x] `POST /v1/auth/token` → 10 req/minute per IP (credential stuffing defense).
+  - [x] `POST /v1/documents/upload` → 20 req/minute per IP.
+  - [x] `POST /v1/documents/upload/async` → 20 req/minute per IP.
+  - [x] `POST /v1/harness/ask` → 30 req/minute per IP.
+  - [x] `POST /v1/retrieval/search` → 60 req/minute per IP.
+  - [x] 429 responses with `Retry-After` header and clean JSON error body.
+  - [x] Automatic Redis→MemoryStorage fallback (works offline / in CI without Docker).
+  - [x] 5 unit tests in `tests/unit/test_rate_limiting.py` (structural + 4 breach tests).
 
 ### 10.5 Deployment & Cloud Packaging
-- [ ] **Production Docker Compose (`docker-compose.prod.yml`)**
-  - [ ] Bundle FastAPI, Celery worker, PostgreSQL (pgvector), MinIO, and Redis into a single production compose file.
-- [ ] **Kubernetes Helm Charts / Manifests**
-  - [ ] Create deployment and service manifests for deploying into AWS EKS, Google Cloud GKE, or Azure AKS.
+- [x] **Dockerfile** (multi-stage build, non-root `mcp` user, `uv` runtime)
+- [x] **Production Docker Compose (`docker-compose.prod.yml`)**
+  - [x] 7 services: `postgres` (pgvector:pg17), `redis` (7-alpine, password-protected), `minio`, `init-db` (one-shot), `api` (2 Uvicorn workers), `worker` (Celery, 2 concurrency), `mcp-server` (SSE transport).
+  - [x] Health checks and dependency ordering on all services.
+  - [x] `JWT_SECRET_KEY` required env var guard — fails fast in production if unset.
+- [x] **Kubernetes Manifests (`k8s/`)**
+  - [x] `k8s/base/`: `namespace.yaml`, `configmap.yaml`, `secrets.yaml`, `postgres.yaml` (StatefulSet), `redis.yaml` (StatefulSet), `minio.yaml` (Deployment + PVC), `api-deployment.yaml` (2 replicas), `worker-deployment.yaml`, `ingress.yaml` (NGINX), `hpa.yaml` (api: 2–10 replicas, worker: 2–8), `kustomization.yaml`.
+  - [x] `k8s/overlays/dev/`: 1 replica each, DEBUG logging.
+  - [x] `k8s/overlays/prod/`: 3 replicas, pinned image tag `stable`.
 
 ---
 

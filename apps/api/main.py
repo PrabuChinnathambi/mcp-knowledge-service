@@ -3,9 +3,14 @@ import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
 from packages.core.config import get_settings
 from packages.harness.agent import ask_docs
@@ -27,6 +32,51 @@ settings = get_settings()
 
 bearer_security = HTTPBearer(auto_error=False)
 
+# ============================================================================
+# Rate Limiter Setup — tries Redis, falls back to in-memory storage
+# ============================================================================
+# In production (REDIS_URL set), rate-limit counters are shared across all
+# API replicas via Redis.  During local dev / unit tests (no Redis), the
+# limiter automatically degrades to a process-local MemoryStorage so the app
+# and tests work without any running Redis instance.
+_redis_url = getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
+
+
+def _build_limiter() -> "Limiter":
+    """Return a Limiter backed by Redis when available, else MemoryStorage."""
+    try:
+        import redis as _redis_lib
+        _client = _redis_lib.from_url(_redis_url, socket_connect_timeout=1)
+        _client.ping()
+        return Limiter(
+            key_func=get_remote_address,
+            storage_uri=_redis_url,
+            strategy="fixed-window",
+        )
+    except Exception:
+        # Redis offline (CI, unit tests, local dev without Docker) — use memory
+        return Limiter(
+            key_func=get_remote_address,
+            storage_uri="memory://",
+            strategy="fixed-window",
+        )
+
+
+limiter = _build_limiter()
+
+
+def _rate_limit_handler(_request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """Return a clean 429 response when a rate limit is hit."""
+    return JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Rate limit exceeded. Please slow down your requests.",
+            "limit": str(exc.limit),
+            "retry_after": "60s",
+        },
+        headers={"Retry-After": "60"},
+    )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -37,12 +87,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title=f"{settings.APP_NAME} REST Gateway",
-    description="Enterprise Knowledge Retrieval, Document Ingestion, and Multi-LLM Agent Grounding REST API with JWT Authentication.",
+    description=(
+        "Enterprise Knowledge Retrieval, Document Ingestion, and Multi-LLM Agent Grounding REST API "
+        "with JWT Authentication and Redis-backed Rate Limiting."
+    ),
     version="0.1.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Attach SlowAPI middleware and exception handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 
 # ============================================================================
@@ -148,9 +206,12 @@ async def health_check() -> dict[str, str]:
 
 
 @app.post("/v1/auth/token", response_model=TokenResponse, tags=["Authentication"])
-async def login_for_access_token(credentials: LoginRequest) -> TokenResponse:
+@limiter.limit("10/minute")
+async def login_for_access_token(request: Request, credentials: LoginRequest) -> TokenResponse:
     """
     Authenticate user credentials and generate a signed JWT Bearer access token.
+    Rate limited to **10 requests/minute** per IP to block credential stuffing attacks.
+
     Default credentials for dev testing:
     - alice / password123 (Role: admin, Workspaces: hr-docs, api-docs, engineering)
     - bob / password123 (Role: viewer, Workspaces: api-docs)
@@ -198,7 +259,9 @@ SUPPORTED_UPLOAD_EXTENSIONS = {".md", ".txt", ".pdf", ".docx", ".xlsx"}
 
 
 @app.post("/v1/documents/upload", tags=["Ingestion"])
+@limiter.limit("20/minute")
 async def upload_document(
+    request: Request,
     file: UploadFile = File(..., description="Document file to upload (.md, .txt, .pdf, .docx, .xlsx)"),
     workspace_id: str = Form(..., description="Target knowledge workspace"),
     user_id: str | None = Form(default=None, description="Optional override user ID for RBAC"),
@@ -206,6 +269,7 @@ async def upload_document(
 ) -> dict:
     """
     Upload and synchronously index a document into a workspace.
+    Rate limited to **20 uploads/minute** per IP.
     Performs PII redaction, hierarchical section chunking, 768-dim GPU embedding, and delta re-indexing.
     """
     effective_user = user_id or current_user
@@ -248,7 +312,9 @@ async def upload_document(
 
 
 @app.post("/v1/documents/upload/async", tags=["Ingestion"])
+@limiter.limit("20/minute")
 async def upload_document_async(
+    request: Request,
     file: UploadFile = File(..., description="Document file to queue (.md, .txt, .pdf, .docx, .xlsx)"),
     workspace_id: str = Form(..., description="Target knowledge workspace"),
     user_id: str | None = Form(default=None, description="Optional override user ID for RBAC"),
@@ -256,6 +322,7 @@ async def upload_document_async(
 ) -> dict:
     """
     Asynchronously upload a heavy document. Enqueues processing to Celery background workers.
+    Rate limited to **20 uploads/minute** per IP.
     Returns task_id for polling status via GET /v1/tasks/{task_id}.
     """
     effective_user = user_id or current_user
@@ -313,46 +380,52 @@ async def get_task_status(task_id: str) -> dict:
 
 
 @app.post("/v1/harness/ask", tags=["Agent Harness"])
+@limiter.limit("30/minute")
 async def ask_knowledge(
-    request: AskRequest,
+    request: Request,
+    body: AskRequest,
     current_user: str = Depends(get_current_user),
 ) -> dict:
     """
     Ask a question grounded in documentation through the Agent Harness.
+    Rate limited to **30 questions/minute** per IP.
     Enforces RBAC, PII redaction, prompt injection defense, hybrid RRF retrieval,
     strict JSON schema synthesis via local LLM, and citation verification.
     """
-    effective_user = request.user_id or current_user
-    logger.info("REST ask_knowledge called", workspace=request.workspace_id, user_id=effective_user, model=request.model)
+    effective_user = body.user_id or current_user
+    logger.info("REST ask_knowledge called", workspace=body.workspace_id, user_id=effective_user, model=body.model)
     return await ask_docs(
-        question=request.question,
-        workspace_id=request.workspace_id,
+        question=body.question,
+        workspace_id=body.workspace_id,
         user_id=effective_user,
-        top_k=request.top_k,
-        model=request.model,
+        top_k=body.top_k,
+        model=body.model,
     )
 
 
 @app.post("/v1/retrieval/search", tags=["Retrieval"])
+@limiter.limit("60/minute")
 async def search_retrieval(
-    request: SearchRequest,
+    request: Request,
+    body: SearchRequest,
     current_user: str = Depends(get_current_user),
 ) -> dict:
     """
     Direct hybrid search combining dense vector similarity (<=>) and sparse tsvector search
     fused with Reciprocal Rank Fusion (RRF k=60).
+    Rate limited to **60 searches/minute** per IP.
     """
-    effective_user = request.user_id or current_user
+    effective_user = body.user_id or current_user
     try:
-        assert_workspace_access(effective_user, request.workspace_id)
+        assert_workspace_access(effective_user, body.workspace_id)
     except AccessDeniedError as e:
         raise HTTPException(status_code=403, detail=str(e))
 
-    logger.info("REST hybrid search called", workspace=request.workspace_id, query=request.query)
+    logger.info("REST hybrid search called", workspace=body.workspace_id, query=body.query)
     retrieval = await hybrid_retrieve(
-        query=request.query,
-        workspace_id=request.workspace_id,
-        top_k=request.top_k,
+        query=body.query,
+        workspace_id=body.workspace_id,
+        top_k=body.top_k,
     )
 
     return {
