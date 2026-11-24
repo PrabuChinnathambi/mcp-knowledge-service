@@ -58,3 +58,12 @@ data/storage/*
 # Evaluation reports
 evals/reports/*
 !evals/reports/.gitkeep
+
+# Local developer notes (never pushed to GitHub)
+*.local.*
+
+# Frontend Node & Vite
+node_modules/
+dist/
+.vite/
+npm-debug.log*
