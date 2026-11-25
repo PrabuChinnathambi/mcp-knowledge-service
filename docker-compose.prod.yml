@@ -1,0 +1,205 @@
+services:
+  # ──────────────────────────────────────────────────────────────
+  # PostgreSQL 17 + pgvector
+  # ──────────────────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: mcp-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_prod}
+      POSTGRES_DB: ${POSTGRES_DB:-mcp-knowledge-service}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-mcp-knowledge-service}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mcp-net
+
+  # ──────────────────────────────────────────────────────────────
+  # Redis 7 (Celery broker + rate-limit backend)
+  # ──────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: mcp-redis-prod
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redis_secret}"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_secret}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - mcp-net
+
+  # ──────────────────────────────────────────────────────────────
+  # MinIO S3-Compatible Object Storage
+  # ──────────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:RELEASE.2024-05-10T01-41-38Z
+    container_name: mcp-minio-prod
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-changeme_in_prod}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mcp-net
+
+  # ──────────────────────────────────────────────────────────────
+  # DB Schema Initializer (runs once on startup)
+  # ──────────────────────────────────────────────────────────────
+  init-db:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-init-db
+    restart: on-failure
+    command: ["uv", "run", "python", "-m", "packages.infrastructure.init_db"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-changeme_in_prod}@postgres:5432/${POSTGRES_DB:-mcp-knowledge-service}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mcp-net
+
+  # ──────────────────────────────────────────────────────────────
+  # FastAPI REST Gateway
+  # ──────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-api-prod
+    restart: unless-stopped
+    command: ["uv", "run", "uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      APP_NAME: mcp-knowledge-service
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-changeme_in_prod}@postgres:5432/${POSTGRES_DB:-mcp-knowledge-service}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-changeme_in_prod}
+      MINIO_BUCKET: ${MINIO_BUCKET:-knowledge-docs}
+      MINIO_SECURE: "false"
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text:latest}
+      EMBEDDING_DIMENSIONS: "768"
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b-instruct}
+      SUPPORTED_LLM_MODELS: ${SUPPORTED_LLM_MODELS:-qwen2.5:7b-instruct,llama3.2:3b,deepseek-r1:1.5b}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in production}
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
+      MCP_USER_ID: alice
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - mcp-net
+
+  # ──────────────────────────────────────────────────────────────
+  # Celery Background Worker (async document ingestion)
+  # ──────────────────────────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-worker-prod
+    restart: unless-stopped
+    command: ["uv", "run", "celery", "-A", "apps.worker.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-changeme_in_prod}@postgres:5432/${POSTGRES_DB:-mcp-knowledge-service}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-changeme_in_prod}
+      MINIO_BUCKET: ${MINIO_BUCKET:-knowledge-docs}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text:latest}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b-instruct}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+    networks:
+      - mcp-net
+
+  # ──────────────────────────────────────────────────────────────
+  # MCP Server (stdio + SSE transport)
+  # ──────────────────────────────────────────────────────────────
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-server-prod
+    restart: unless-stopped
+    command: ["uv", "run", "python", "-m", "apps.mcp_server.main", "--transport", "sse", "--host", "0.0.0.0", "--port", "8080"]
+    ports:
+      - "${MCP_PORT:-8080}:8080"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-changeme_in_prod}@postgres:5432/${POSTGRES_DB:-mcp-knowledge-service}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-changeme_in_prod}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b-instruct}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+    networks:
+      - mcp-net
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+
+networks:
+  mcp-net:
+    driver: bridge

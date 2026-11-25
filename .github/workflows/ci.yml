@@ -1,0 +1,62 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, feat-setup-mcp-environment]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-and-eval:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: myMCPsecretpassword
+          POSTGRES_DB: mcp-knowledge-service
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: uv sync --all-groups
+
+      - name: Code Quality & Linting
+        run: |
+          uv run ruff check .
+
+      - name: Initialize Database Schema
+        env:
+          DATABASE_URL: postgresql+asyncpg://admin:myMCPsecretpassword@localhost:5432/mcp-knowledge-service
+        run: uv run python -m packages.infrastructure.init_db
+
+      - name: Run Pytest Suite
+        env:
+          DATABASE_URL: postgresql+asyncpg://admin:myMCPsecretpassword@localhost:5432/mcp-knowledge-service
+          EMBEDDING_PROVIDER: mock
+        run: uv run pytest tests/unit/

@@ -12,14 +12,16 @@ dependencies = [
     "asyncpg>=0.32.0",
     "celery>=5.6.3",
     "fastapi>=0.162.0",
+    "greenlet>=3.5.6",
     "httpx>=0.28.1",
     "mcp[cli]>=2.3.0",
     "minio>=7.2.20",
     "pgvector>=0.5.1",
-    "pydantic>=2.14.2", 
+    "pydantic>=2.14.2",
     "pydantic-settings>=2.16.2",
     "python-multipart>=0.0.32",
     "redis>=8.1.0",
+    "slowapi>=0.1.10",
     "sqlalchemy>=2.1.6",
     "structlog>=26.1.0",
     "tenacity>=9.2.1",
@@ -46,4 +48,17 @@ dev = [
 pythonpath = ["."]
 testpaths = ["tests"]
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+ignore = [
+    "B008",     # Allow FastAPI Depends/File/Form in default parameters
+    "BLE001",   # Allow catching Exception in top-level handlers
+    "ASYNC230", # Allow sync file open in async routines
+    "S110",     # Allow pass in cleanup try/except blocks
+]
+
 

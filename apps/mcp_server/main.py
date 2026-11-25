@@ -1,0 +1,106 @@
+
+from mcp.server.mcpserver import MCPServer
+
+from packages.core.config import get_settings
+from packages.harness.agent import ask_docs
+from packages.harness.auth import (
+    USER_DIRECTORY,
+    assert_can_write,
+    assert_workspace_access,
+)
+from packages.infrastructure.llm import llm_client
+from packages.ingestion.pipeline import ingest_document_file
+from packages.observability.logger import logger
+from packages.retrieval.hybrid import hybrid_retrieve
+
+settings = get_settings()
+
+mcp = MCPServer(
+    name="knowledge-service",
+    instructions="Enterprise knowledge retrieval server with citation-verified document grounding.",
+)
+
+
+@mcp.tool(name="list_collections", description="List accessible knowledge workspaces for the current user.")
+async def list_collections() -> list[str]:
+    user_id = settings.MCP_USER_ID
+    logger.info("mcp_tool_called", tool="list_collections", user_id=user_id)
+    user_record = USER_DIRECTORY.get(user_id, {"workspaces": []})
+    return user_record["workspaces"]
+
+
+@mcp.tool(
+    name="search_knowledge",
+    description="Hybrid semantic and keyword search. Returns ranked document chunks with relevance scores.",
+)
+async def search_knowledge(workspace_id: str, query: str, top_k: int = 5) -> dict:
+    user_id = settings.MCP_USER_ID
+    logger.info("mcp_tool_called", tool="search_knowledge", workspace=workspace_id, user_id=user_id)
+    assert_workspace_access(user_id, workspace_id)
+    retrieval = await hybrid_retrieve(query=query, workspace_id=workspace_id, top_k=top_k)
+    return {
+        "results": [
+            {
+                "chunk_id": c.id,
+                "title": c.title,
+                "section": c.section_title,
+                "content": c.content,
+                "score": c.score,
+                "source_uri": c.source_uri,
+            }
+            for c in retrieval.chunks
+        ],
+        "trace": retrieval.trace,
+    }
+
+
+@mcp.tool(
+    name="list_models",
+    description="List available local offline LLMs (Qwen 2.5, Llama 3.2, DeepSeek-R1) and their installation status.",
+)
+async def list_models_tool() -> list[dict]:
+    logger.info("mcp_tool_called", tool="list_models")
+    return await llm_client.list_available_models()
+
+
+@mcp.tool(
+    name="ask_docs",
+    description="Ask a question grounded in documentation. Optionally specify model ('qwen2.5:7b-instruct', 'llama3.2:3b', 'deepseek-r1:1.5b'). Returns a verified answer with citations.",
+)
+async def ask_docs_tool(workspace_id: str, question: str, model: str | None = None) -> dict:
+    user_id = settings.MCP_USER_ID
+    logger.info("mcp_tool_called", tool="ask_docs", workspace=workspace_id, user_id=user_id, model=model)
+    return await ask_docs(question=question, workspace_id=workspace_id, user_id=user_id, model=model)
+
+
+@mcp.tool(
+    name="ingest_document",
+    description="Index a document into a workspace. Requires write permissions.",
+)
+async def ingest_document_tool(workspace_id: str, file_path: str) -> dict:
+    user_id = settings.MCP_USER_ID
+    logger.info("mcp_tool_called", tool="ingest_document", workspace=workspace_id, user_id=user_id)
+    assert_can_write(user_id, workspace_id)
+    return await ingest_document_file(file_path=file_path, workspace_id=workspace_id)
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="MCP Knowledge Server")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse"],
+        default="stdio",
+        help="Transport protocol: 'stdio' (default, local JSON-RPC) or 'sse' (HTTP Server-Sent Events)",
+    )
+    parser.add_argument("--host", default="0.0.0.0", help="Host address when running in SSE mode")
+    parser.add_argument("--port", type=int, default=8080, help="Port when running in SSE mode")
+    args = parser.parse_args()
+
+    if args.transport == "sse":
+        logger.info("Starting MCP server over SSE transport", host=args.host, port=args.port)
+        mcp.run(transport="sse", host=args.host, port=args.port)
+    else:
+        # Default: stdio JSON-RPC for Claude Desktop & Cursor
+        mcp.run()
